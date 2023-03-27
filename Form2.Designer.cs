@@ -30,9 +30,9 @@ namespace Cryptocomm
         private void InitializeComponent()
         {
             this.panel1 = new System.Windows.Forms.Panel();
+            this.button2 = new System.Windows.Forms.Button();
             this.button1 = new System.Windows.Forms.Button();
             this.listBox1 = new System.Windows.Forms.ListBox();
-            this.button2 = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -46,6 +46,18 @@ namespace Cryptocomm
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(151, 498);
             this.panel1.TabIndex = 1;
+            // 
+            // button2
+            // 
+            this.button2.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.button2.ForeColor = System.Drawing.Color.Black;
+            this.button2.Location = new System.Drawing.Point(0, 452);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(151, 23);
+            this.button2.TabIndex = 5;
+            this.button2.Text = "Написать";
+            this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
             // button1
             // 
@@ -74,18 +86,6 @@ namespace Cryptocomm
             this.listBox1.Size = new System.Drawing.Size(151, 498);
             this.listBox1.TabIndex = 1;
             this.listBox1.SelectedIndexChanged += new System.EventHandler(this.listBox1_SelectedIndexChanged_1);
-            // 
-            // button2
-            // 
-            this.button2.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.button2.ForeColor = System.Drawing.Color.Black;
-            this.button2.Location = new System.Drawing.Point(0, 452);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(151, 23);
-            this.button2.TabIndex = 5;
-            this.button2.Text = "Написать";
-            this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
             // Form2
             // 

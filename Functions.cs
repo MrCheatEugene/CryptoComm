@@ -13,12 +13,22 @@ using System.Security.Authentication;
 using System.Text;
 using System.Security.Cryptography.X509Certificates;
 using System.IO;
-
+using System.Security.Cryptography;
+using System.Windows.Forms;
 
 namespace Cryptocomm
 {
     class Functions
     {
+
+        public static byte[] Combine(byte[] first, byte[] second)
+        {
+            byte[] bytes = new byte[first.Length + second.Length];
+            Buffer.BlockCopy(first, 0, bytes, 0, first.Length);
+            Buffer.BlockCopy(second, 0, bytes, first.Length, second.Length);
+            return bytes;
+        }
+
         public string MD5OfBuild()
         {
             System.Security.Cryptography.MD5CryptoServiceProvider md5 = new System.Security.Cryptography.MD5CryptoServiceProvider();
@@ -74,11 +84,15 @@ namespace Cryptocomm
 
     public sealed class SslTcpServer
     {
+        private static RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(1024);
         static X509Certificate serverCertificate = null;
+        private static byte[] clientKey = new byte[4096];
         // The certificate parameter specifies the name of the file
         // containing the machine certificate.
         public static void RunServer(string certificate)
+
         {
+            clientKey[0] = 0x00;
             Console.WriteLine(certificate);
             serverCertificate = new X509Certificate(certificate,"");
             // Create a TCP/IP (IPv4) socket and listen for incoming connections.
@@ -113,14 +127,32 @@ namespace Cryptocomm
                 sslStream.ReadTimeout = 5000;
                 sslStream.WriteTimeout = 5000;
                 // Read a message from the client.
+
                 Console.WriteLine("Waiting for client message...");
                 string messageData = ReadMessage(sslStream);
-                Console.WriteLine("Received: {0}", messageData);
+                byte[] rawmd = Encoding.UTF8.GetBytes(messageData);
+                Console.WriteLine(BitConverter.ToString(rawmd));
+                if (rawmd[0] == 0x05 && rawmd[1] == 0xEF && rawmd[2] == 0xBF && rawmd[3] == 0xBD && rawmd[4] == 0xEF && rawmd[5] == 0xBF && rawmd[6] == 0xBD && clientKey[0]==0x00)
+                {
+                    byte[] handshake = { 0x05, 0x85, 0x85, 0x01, 0x03, 0x00 };
+                    clientKey = Encoding.UTF8.GetBytes(messageData.Replace(Encoding.UTF8.GetString(handshake),"")) ;
+                    Console.WriteLine("Обмен ключами, ключ клиента");
+                    Console.WriteLine(Encoding.UTF8.GetString(clientKey));
+                    byte[] messsage = { 0x05, 0x85, 0x85, 0x01, 0x03, 0x00 };// "мой ключ - ..."
+                    messsage = Functions.Combine(messsage, Encoding.UTF8.GetBytes(rsa.ToXmlString(false) + "<EOF>"));
+                    sslStream.Write(messsage);
+                    string prepd = Encoding.UTF8.GetString(clientKey).Replace("<RSAKeyValue><Modulus>", "").Replace("</Modulus><Exponent>AQAB</Exponent></RSAKeyValue><EOF>", "");
+                    MessageBox.Show("Подключение успешно. Ключ клиента - " + prepd.Substring(0, 5) + "..." + prepd.Substring(prepd.Length - 5, 5), "Ошибка");
+                }
+                else
+                {
+                    Console.WriteLine("Received: {0}", messageData);
+                    byte[] message = Encoding.UTF8.GetBytes("Hello from the server.<EOF>");
+                    Console.WriteLine("Sending hello message.");
+                    sslStream.Write(message);
+                }
 
                 // Write a message to the client.
-                byte[] message = Encoding.UTF8.GetBytes("Hello from the server.<EOF>");
-                Console.WriteLine("Sending hello message.");
-                sslStream.Write(message);
             }
             catch (AuthenticationException e)
             {
@@ -154,7 +186,7 @@ namespace Cryptocomm
             do
             {
                 // Read the client's test message.
-                bytes = sslStream.Read(buffer, 0, buffer.Length);
+                try{bytes = sslStream.Read(buffer, 0, buffer.Length);}catch(Exception e){return "";}
 
                 // Use Decoder class to convert from bytes to UTF8
                 // in case a character spans two buffers.
@@ -227,10 +259,14 @@ namespace Cryptocomm
         }
     }
 
+
+
     public class SslTcpClient
     {
+        private static Aes aes = Aes.Create();
         private static Hashtable certificateErrors = new Hashtable();
-
+        private static RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(1024);
+        private static byte[] serverKey = new byte[4066];
         // The following method is invoked by the RemoteCertificateValidationDelegate.
         public static bool ValidateServerCertificate(
               object sender,
@@ -241,12 +277,21 @@ namespace Cryptocomm
             return true; // костыль зато работает
         }
 
+
         public static void RunClient(string machineName, string serverName)
         {
+            serverKey[0] = 0x00;
             // Create a TCP/IP client socket.
             // machineName is the host running the server application.
-            TcpClient client = new TcpClient(machineName, 6000);
-
+            TcpClient client = null;
+            try
+            {
+                client = new TcpClient(machineName, 6000);
+            }catch(SocketException e)
+            {
+                MessageBox.Show("Ошибка при подключении: " + e.Message, "Ошибка");
+                return;
+            }
             Console.WriteLine("Client connected.");
             // Create an SSL stream that will close the client's stream.
             SslStream sslStream = new SslStream(
@@ -271,15 +316,39 @@ namespace Cryptocomm
                 client.Close();
                 return;
             }
-            // Encode a test message into a byte array.
-            // Signal the end of the message using the "<EOF>".
-            byte[] messsage = Encoding.UTF8.GetBytes("Hello from the client.<EOF>");
-            // Send hello message to the server.
-            sslStream.Write(messsage);
-            sslStream.Flush();
+            byte[] helloe = { };
+            helloe=rsa.Encrypt(Encoding.UTF8.GetBytes("Hello"),false);
+            if (serverKey[0] == 0x00)
+            {
+                byte[] messsage = { 0x05, 0x85, 0x85, 0x01, 0x03, 0x00 };// "мой ключ - ..."
+                messsage = Functions.Combine(messsage, Encoding.UTF8.GetBytes(rsa.ToXmlString(false) + "<EOF>"));
+                // Send hello message to the server.
+                sslStream.Write(messsage);
+                sslStream.Flush();
+            }
+            else {
+                sslStream.Write(helloe);
+                sslStream.Flush();
+            }
             // Read message from the server.
             string serverMessage = ReadMessage(sslStream);
-            Console.WriteLine("Server says: {0}", serverMessage);
+            byte[] rawmd = Encoding.UTF8.GetBytes(serverMessage);
+            if (rawmd[0] == 0x05 && rawmd[1] == 0xEF && rawmd[2] == 0xBF && rawmd[3] == 0xBD && rawmd[4] == 0xEF && rawmd[5] == 0xBF && rawmd[6] == 0xBD && serverKey[0]==0x00 )
+            {
+                byte[] handshake = { 0x05, 0x85, 0x85, 0x01, 0x03, 0x00 };
+                serverKey = Encoding.UTF8.GetBytes(serverMessage.Replace(Encoding.UTF8.GetString(handshake), ""));
+                Console.WriteLine("Обмен ключами, ключ сервера");
+                Console.WriteLine(Encoding.UTF8.GetString(serverKey));
+                byte[] message = { 0x05, 0x85, 0x85, 0x01, 0x03, 0x00 };// "мой ключ - ..."
+                message = Functions.Combine(message, Encoding.UTF8.GetBytes(rsa.ToXmlString(false) + "<EOF>"));
+                sslStream.Write(message);
+                string prepd = Encoding.UTF8.GetString(serverKey).Replace("<RSAKeyValue><Modulus>", "").Replace("</Modulus><Exponent>AQAB</Exponent></RSAKeyValue><EOF>", "");
+                MessageBox.Show("Подключение успешно. Ключ клиента - " + prepd.Substring(0, 5) + "..." + prepd.Substring(prepd.Length - 5, 5), "Ошибка");
+            }
+            else
+            {
+                Console.WriteLine("Server says: {0}", serverMessage);
+            }
             // Close the client connection.
             client.Close();
             Console.WriteLine("Client closed.");
@@ -294,7 +363,7 @@ namespace Cryptocomm
             int bytes = -1;
             do
             {
-                bytes = sslStream.Read(buffer, 0, buffer.Length);
+                try{bytes = sslStream.Read(buffer, 0, buffer.Length);}catch(Exception e){return "";}
 
                 // Use Decoder class to convert from bytes to UTF8
                 // in case a character spans two buffers.
@@ -311,6 +380,8 @@ namespace Cryptocomm
 
             return messageData.ToString();
         }
+
+
         private static void DisplayUsage()
         {
             Console.WriteLine("To start the client specify:");
@@ -341,3 +412,4 @@ namespace Cryptocomm
         }
     }
 }
+

@@ -9,6 +9,7 @@ namespace Cryptocomm
     public partial class Form2 : Form
     {
         Functions functions = new Functions();
+
         public void InitAddrs()
         {
             Console.WriteLine("Addr init..");
@@ -87,8 +88,17 @@ namespace Cryptocomm
             SslTcpClient.RunClient(actualip, "publickey.cer");
         }
 
+        public static Thread cth = null;
         private void button2_Click(object sender, EventArgs e)
         {
+
+            if(button2.Text == "Прервать")
+            {
+                cth.Abort();
+                button2.Text = "Написать";
+                listBox1.Enabled = true;
+                return;
+            }
             DialogResult res = MessageBox.Show("Вы хотите начать диалог с " + listBox1.SelectedItem.ToString() + "?", "Внимание", MessageBoxButtons.YesNo);
             if (res == DialogResult.Yes)
             {
@@ -112,8 +122,10 @@ namespace Cryptocomm
                 {
                     if (Functions.PingHost(actualip))
                     {
-                        var th = new Thread(() => startsslc(actualip));
-                        th.Start();
+                        cth = new Thread(() => startsslc(actualip));
+                        cth.Start(); 
+                        button2.Text = "Прервать";
+                        listBox1.Enabled = false;
                     }
                     else
                     {
